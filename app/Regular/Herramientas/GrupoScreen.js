@@ -1,146 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  ScrollView
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../Herramientas/UserContext';
+import { useTheme } from './theme';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getApiUrl } from './apiConfig';
+const API_URL = getApiUrl();
 
-const GrupoScreen = ({ route, navigation }) => {
+const GrupoScreen = ({ navigation }) => {
   const { user } = useUser();
-  const { perfilData } = route.params || {};
+  const colors = useTheme();
+  const [tipoSangre, setTipoSangre] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [tipoSangre, setTipoSangre] = useState(perfilData?.tipoSangre || '');
-
-  const handleSave = async () => {
-    if (!tipoSangre.trim()) {
-      Alert.alert('Error', 'Debes ingresar tu tipo de sangre.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/grupo`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          usuario_id: user.id,
-          descripcion: tipoSangre,
-        }),
-      });
-
-      if (response.ok) {
-        Alert.alert('Éxito', 'Grupo sanguíneo guardado.');
-        navigation.goBack();
-      } else {
-        throw new Error();
+  useEffect(() => {
+    const fetchRH = async () => {
+      try {
+        const response = await fetch(`${API_URL}/datos/${user.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          const perfil = data?.data?.[0] || data?.data || data;
+          setTipoSangre(perfil?.tipo_sangre || null);
+        }
+      } catch {
+        setTipoSangre(null);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar.');
-    }
-  };
+    };
+    if (user?.id) fetchRH();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Grupo Sanguíneo</Text>
 
-      <Text style={styles.title}>Grupo Sanguíneo</Text>
-      <Text style={styles.subtitle}>
-        Registra tu tipo de sangre para tu perfil de salud
-      </Text>
+      <View style={[styles.card, { backgroundColor: colors.card }]}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Tu tipo de sangre</Text>
+        <Text style={[styles.bloodType, { color: colors.primary }]}>{tipoSangre || 'No registrado'}</Text>
+        <Text style={[styles.hint, { color: colors.textLight }]}>
+          {tipoSangre
+            ? 'Para modificar tu tipo de sangre, ve a Editar Perfil'
+            : 'Ve a Editar Perfil para registrar tu tipo de sangre'}
+        </Text>
+      </View>
 
-      {/* Input */}
-      <Text style={styles.label}>Tipo de sangre</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Ej: O+, A-, AB+"
-        value={tipoSangre}
-        onChangeText={setTipoSangre}
-      />
-
-      {/* Botón principal */}
-      <TouchableOpacity style={styles.button} onPress={handleSave}>
-        <Text style={styles.buttonText}>Guardar</Text>
+      <TouchableOpacity style={[styles.button, { backgroundColor: colors.primary }]} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back-outline" size={18} color="#fff" />
+        <Text style={[styles.buttonText, { color: colors.white }]}>Volver</Text>
       </TouchableOpacity>
-
-      {/* Botón volver */}
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.secondaryText}>Volver</Text>
-      </TouchableOpacity>
-
     </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#F5F7FA',
     padding: 20,
-    justifyContent: 'center',
   },
-
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#1E1E1E',
-    textAlign: 'center',
-    marginBottom: 5,
-  },
-
-  subtitle: {
-    fontSize: 14,
-    color: '#7A7A7A',
     textAlign: 'center',
     marginBottom: 25,
   },
-
+  card: {
+    borderRadius: 15,
+    padding: 30,
+    alignItems: 'center',
+    elevation: 3,
+  },
   label: {
     fontSize: 14,
-    color: '#4A4A4A',
-    marginBottom: 5,
+    marginBottom: 10,
   },
-
-  input: {
-    height: 50,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-
-  button: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
+  bloodType: {
+    fontSize: 48,
+    fontWeight: 'bold',
     marginBottom: 15,
   },
-
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  hint: {
+    fontSize: 13,
+    textAlign: 'center',
   },
-
-  secondaryButton: {
-    alignItems: 'center',
+  button: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 14, borderRadius: 12, marginTop: 30,
   },
-
-  secondaryText: {
-    color: '#4A90E2',
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  buttonText: { fontSize: 15, fontWeight: '600' },
 });
 
 export default GrupoScreen;

@@ -2,6 +2,8 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/Ionicons";
 import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../Regular/Herramientas/theme";
 
 // Pantallas
 import InicioScreen from "./InicioScreen";
@@ -12,16 +14,17 @@ import ConfiguracionScreen from "./ConfiguracionScreen";
 const Tab = createBottomTabNavigator();
 
 const HomeAdminScreen = () => {
+  const colors = useTheme();
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       initialRouteName="Inicio"
       screenOptions={{
         headerShown: false,
 
-        // 🔥 NUEVO DISEÑO
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: "#4A90E2",
-        tabBarInactiveTintColor: "#A0A0A0",
+        tabBarStyle: [styles.tabBar, { backgroundColor: colors.tabBar, bottom: 15 + insets.bottom }],
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarShowLabel: false,
       }}
     >
@@ -84,11 +87,10 @@ const styles = StyleSheet.create({
     right: 20,
     height: 65,
 
-    backgroundColor: "#FFFFFF",
     borderRadius: 20,
 
-    elevation: 10, // Android sombra
-    shadowColor: "#000", // iOS sombra
+    elevation: 10,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.15,
     shadowRadius: 10,

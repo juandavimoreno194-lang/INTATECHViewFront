@@ -1,172 +1,159 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Alert
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform
 } from 'react-native';
 import { useUser } from './Herramientas/UserContext';
+import { useTheme } from './Herramientas/theme';
+import { showAlert } from './Herramientas/Toast';
+import { Ionicons } from '@expo/vector-icons';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getApiUrl } from './Herramientas/apiConfig';
+const API_URL = getApiUrl();
 
-const RecuperarContraseñaScreen = ({ navigation }) => {
+const CambiarContraseñaScreen = ({ navigation }) => {
   const { user } = useUser();
-
-  const [email, setEmail] = useState('');
+  const colors = useTheme();
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (user?.id) {
-      console.log('User ID:', user.id);
-    }
-  }, [user]);
-
-  const handleRecuperarContraseña = async () => {
-    if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden.");
+  const handleCambiar = async () => {
+    if (!currentPassword) {
+      showAlert('Error', 'Ingresa tu contraseña actual.', 'error');
       return;
     }
-
+    if (!newPassword || !confirmPassword) {
+      showAlert('Error', 'Completa todos los campos.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAlert('Error', 'Las contraseñas nuevas no coinciden.', 'error');
+      return;
+    }
     if (newPassword.length < 6) {
-      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres.");
+      showAlert('Error', 'La nueva contraseña debe tener al menos 6 caracteres.', 'error');
       return;
     }
 
     try {
+      setLoading(true);
       const response = await fetch(`${API_URL}/cambiarcontrasena`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          email,
-          newPassword,
-        }),
+        body: JSON.stringify({ userId: user.id, currentPassword, newPassword }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert("Éxito", "Contraseña actualizada correctamente");
-        navigation.goBack();
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        showAlert('Listo', 'Contraseña actualizada correctamente.', 'success');
       } else {
-        Alert.alert("Error", data.message || "Error al actualizar");
+        showAlert('Error', data.message || 'Error al actualizar.', 'error');
       }
-    } catch (error) {
-      Alert.alert("Error", "Problema con el servidor");
+    } catch {
+      showAlert('Error', 'Problema con el servidor.', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
 
-      <Text style={styles.title}>Recuperar contraseña</Text>
-      <Text style={styles.subtitle}>
-        Ingresa tu correo y nueva contraseña
+      <View style={[styles.headerIcon, { backgroundColor: colors.primary + '18' }]}>
+        <Ionicons name="lock-closed-outline" size={40} color={colors.primary} />
+      </View>
+
+      <Text style={[styles.title, { color: colors.text }]}>Cambiar contraseña</Text>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        Verifica tu contraseña actual antes de establecer una nueva
       </Text>
 
-      {/* Email */}
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        placeholder="Ingresa tu email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-      />
-
-      {/* Nueva contraseña */}
-      <Text style={styles.label}>Nueva contraseña</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Contraseña actual</Text>
       <TextInput
         placeholder="••••••"
+        placeholderTextColor={colors.textSecondary}
+        secureTextEntry
+        value={currentPassword}
+        onChangeText={setCurrentPassword}
+        style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
+      />
+
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Nueva contraseña</Text>
+      <TextInput
+        placeholder="••••••"
+        placeholderTextColor={colors.textSecondary}
         secureTextEntry
         value={newPassword}
         onChangeText={setNewPassword}
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
       />
 
-      {/* Confirmar */}
-      <Text style={styles.label}>Confirmar contraseña</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Confirmar nueva contraseña</Text>
       <TextInput
         placeholder="••••••"
+        placeholderTextColor={colors.textSecondary}
         secureTextEntry
         value={confirmPassword}
         onChangeText={setConfirmPassword}
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.border, color: colors.text }]}
       />
 
-      {/* Botón */}
-      <TouchableOpacity style={styles.button} onPress={handleRecuperarContraseña}>
-        <Text style={styles.buttonText}>Cambiar contraseña</Text>
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: loading ? colors.primary + '80' : colors.primary }]}
+        onPress={handleCambiar}
+        disabled={loading}
+      >
+        <Text style={[styles.buttonText, { color: colors.white }]}>
+          {loading ? 'Verificando...' : 'Cambiar contraseña'}
+        </Text>
       </TouchableOpacity>
 
-      {/* Volver */}
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.back}>Volver al inicio de sesión</Text>
+      <TouchableOpacity style={[styles.backButton, { backgroundColor: colors.primary }]} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back-outline" size={18} color="#fff" />
+        <Text style={styles.backText}>Volver</Text>
       </TouchableOpacity>
 
+    </ScrollView>
+    </KeyboardAvoidingView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-    padding: 25,
-    justifyContent: 'center',
+  container: { flexGrow: 1, padding: 25, justifyContent: 'center' },
+  headerIcon: {
+    width: 80, height: 80, borderRadius: 40,
+    justifyContent: 'center', alignItems: 'center',
+    alignSelf: 'center', marginBottom: 20,
   },
-
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1E1E1E',
-    marginBottom: 5,
+  title: { fontSize: 26, fontWeight: 'bold', marginBottom: 6, textAlign: 'center' },
+  subtitle: { fontSize: 14, marginBottom: 28, textAlign: 'center', lineHeight: 20 },
+  divider: { height: 1, marginVertical: 16, borderRadius: 1 },
+  label: { fontSize: 14, marginBottom: 5 },
+  input: { height: 50, borderRadius: 12, paddingHorizontal: 15, marginBottom: 15, borderWidth: 1 },
+  button: { padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 10, marginBottom: 16 },
+  buttonText: { fontSize: 16, fontWeight: 'bold' },
+  backButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, padding: 14, borderRadius: 12,
   },
-
-  subtitle: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    marginBottom: 30,
-  },
-
-  label: {
-    fontSize: 14,
-    color: '#4A4A4A',
-    marginBottom: 5,
-  },
-
-  input: {
-    height: 50,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-
-  button: {
-    backgroundColor: '#4A90E2',
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-
-  back: {
-    textAlign: 'center',
-    color: '#4A90E2',
-    fontSize: 14,
-  },
+  backText: { fontSize: 15, fontWeight: '600', color: '#fff' },
 });
 
-export default RecuperarContraseñaScreen;
+export default CambiarContraseñaScreen;

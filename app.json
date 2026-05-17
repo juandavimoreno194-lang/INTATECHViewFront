@@ -1,5 +1,6 @@
 {
   "expo": {
+    "cli": { "appVersionSource": "local" },
     "jsEngine": "hermes",
     "name": "InstaTech",
     "slug": "InstaTech",
@@ -16,16 +17,28 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.instatech.instatech",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-notifications",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b7825849-a2b2-4d03-a244-ae6b57bc6558"
+      }
+    },
+    "owner": "instatech"
   }
 }

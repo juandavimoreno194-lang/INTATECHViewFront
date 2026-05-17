@@ -1,24 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Alert
-} from 'react-native';
-import { useUser } from '../Herramientas/UserContext';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useUser } from '../Herramientas/UserContext';
+import { useTheme } from './theme';
+import { showAlert } from './Toast';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+let Notifications = null;
+if (Platform.OS !== 'web') {
+  Notifications = require('expo-notifications');
+}
+
+import { getApiUrl } from './apiConfig';
+const API_URL = getApiUrl();
+const HEADER_COLOR = "#FF6B6B";
+
+const formatearFecha = (fecha) => {
+  if (!fecha) return '';
+  const str = fecha instanceof Date ? fecha.toISOString().slice(0, 10) : String(fecha).slice(0, 10);
+  const [y, m, d] = str.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return isNaN(date.getTime()) ? str : date.toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+};
+
+const formatearHora = (hora) => {
+  if (!hora) return '';
+  const [h, m] = hora.split(':');
+  const hh = parseInt(h, 10);
+  const ampm = hh >= 12 ? 'PM' : 'AM';
+  const h12 = hh % 12 || 12;
+  return `${String(h12).padStart(2, '0')}:${m} ${ampm}`;
+};
 
 const RecordatoriosGuardadosScreen = ({ navigation }) => {
   const { user } = useUser();
+  const colors = useTheme();
   const [recordatorios, setRecordatorios] = useState([]);
 
-  useEffect(() => {
-    if (user) fetchRecordatorios();
-  }, [user]);
+  useFocusEffect(
+    useCallback(() => {
+      if (user) fetchRecordatorios();
+    }, [user])
+  );
 
   const fetchRecordatorios = async () => {
     try {
@@ -27,172 +51,162 @@ const RecordatoriosGuardadosScreen = ({ navigation }) => {
         const data = await response.json();
         setRecordatorios(data);
       }
-    } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar los recordatorios');
+    } catch {
+      showAlert('Error', 'No se pudieron cargar los recordatorios', 'error');
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`${API_URL}/recordatorios/${id}`, {
-        method: 'DELETE',
-      });
-
+      const response = await fetch(`${API_URL}/recordatorios/${id}`, { method: 'DELETE' });
       if (response.ok) {
-        Alert.alert('Eliminado', 'Recordatorio eliminado');
-        fetchRecordatorios();
+        if (Notifications) try { await Notifications.cancelScheduledNotificationAsync(`REMINDER-${id}`); } catch {}
+        const raw = await AsyncStorage.getItem('@recordatorios');
+        const list = (raw && raw.trim()) ? JSON.parse(raw).filter(r => r.id !== id) : [];
+        await AsyncStorage.setItem('@recordatorios', JSON.stringify(list));
+        setRecordatorios(prev => prev.filter(r => r.id !== id));
+        showAlert('Eliminado', 'Recordatorio eliminado correctamente', 'success');
       }
     } catch {
-      Alert.alert('Error', 'No se pudo eliminar');
+      showAlert('Error', 'No se pudo eliminar', 'error');
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-
-      <View style={styles.row}>
-        <Ionicons name="notifications-outline" size={20} color="#4A90E2" />
-        <Text style={styles.title}>{item.titulo}</Text>
-      </View>
-
-      <Text style={styles.info}>📅 {item.fecha}</Text>
-      <Text style={styles.info}>⏰ {item.hora}</Text>
-
-      <TouchableOpacity
-        style={styles.delete}
-        onPress={() => handleDelete(item.id)}
-      >
-        <Text style={styles.deleteText}>Eliminar</Text>
-      </TouchableOpacity>
-
-    </View>
-  );
-
   if (!user) {
     return (
-      <View style={styles.center}>
-        <Text>No hay usuario</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={{ color: colors.text }}>No hay usuario</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, overflow: 'hidden' }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.scroll, { backgroundColor: colors.background }]}>
 
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Recordatorios</Text>
+        <TouchableOpacity style={styles.backArrow} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.headerIcon}>
+          <Ionicons name="alarm-outline" size={36} color="#fff" />
+        </View>
+        <Text style={styles.headerTitle}>Mis Recordatorios</Text>
+        <Text style={styles.headerSub}>Tus citas y eventos programados</Text>
+        {recordatorios.length > 0 && (
+          <View style={styles.countChip}>
+            <Ionicons name="list-outline" size={13} color="#fff" />
+            <Text style={styles.countChipText}>{recordatorios.length} recordatorios</Text>
+          </View>
+        )}
       </View>
 
       {recordatorios.length === 0 ? (
-        <Text style={styles.empty}>
-          No tienes recordatorios guardados
-        </Text>
+        <View style={styles.emptyBox}>
+          <Ionicons name="alarm-outline" size={52} color={colors.textSecondary} />
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No tienes recordatorios guardados</Text>
+          <TouchableOpacity
+            style={[styles.emptyAction, { backgroundColor: HEADER_COLOR }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="add-outline" size={18} color="#fff" />
+            <Text style={styles.emptyActionText}>Crear recordatorio</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
-        <FlatList
-          data={recordatorios}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={{ padding: 20 }}
-        />
+        recordatorios.map((item) => (
+          <View key={item.id} style={[styles.card, { backgroundColor: colors.card }]}>
+            <View style={[styles.cardTop, { borderBottomColor: colors.border }]}>
+              <View style={[styles.iconBox, { backgroundColor: HEADER_COLOR + '18' }]}>
+                <Ionicons name="notifications-outline" size={22} color={HEADER_COLOR} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.titleText, { color: colors.text }]}>{item.titulo}</Text>
+              </View>
+            </View>
+            <View style={styles.cardBody}>
+              <View style={styles.infoRow}>
+                <View style={[styles.infoChip, { backgroundColor: colors.background }]}>
+                  <Ionicons name="calendar-outline" size={14} color={HEADER_COLOR} />
+                  <Text style={[styles.infoText, { color: colors.text }]}>{formatearFecha(item.fecha)}</Text>
+                </View>
+                <View style={[styles.infoChip, { backgroundColor: colors.background }]}>
+                  <Ionicons name="time-outline" size={14} color={HEADER_COLOR} />
+                  <Text style={[styles.infoText, { color: colors.text }]}>{formatearHora(item.hora)}</Text>
+                </View>
+              </View>
+            </View>
+            <View style={styles.cardFooter}>
+              <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.id)}>
+                <Ionicons name="trash-outline" size={15} color="#E74C3C" />
+                <Text style={styles.deleteText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
       )}
 
-      {/* Botón volver */}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.buttonText}>Volver</Text>
+      <TouchableOpacity style={[styles.backBtn, { borderColor: HEADER_COLOR }]} onPress={() => navigation.goBack()}>
+        <Ionicons name="arrow-back-outline" size={18} color={HEADER_COLOR} />
+        <Text style={[styles.backBtnText, { color: HEADER_COLOR }]}>Volver</Text>
       </TouchableOpacity>
 
+    </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-  },
-
+  scroll: { flexGrow: 1, paddingBottom: 40 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
-    backgroundColor: '#4A90E2',
-    paddingVertical: 25,
-    alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    backgroundColor: HEADER_COLOR, paddingTop: 50, paddingBottom: 30,
+    alignItems: 'center', borderBottomLeftRadius: 30, borderBottomRightRadius: 30,
   },
-
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  backArrow: { position: 'absolute', top: 50, left: 18, padding: 6 },
+  headerIcon: {
+    width: 72, height: 72, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 12,
   },
-
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  headerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginBottom: 12 },
+  countChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+  },
+  countChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  emptyBox: { alignItems: 'center', marginTop: 60, gap: 12 },
+  emptyText: { fontSize: 14 },
+  emptyAction: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 14,
+  },
+  emptyActionText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   card: {
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    elevation: 3,
+    marginHorizontal: 20, marginTop: 14, borderRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
   },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+  cardTop: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
+  iconBox: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  titleText: { fontSize: 16, fontWeight: '700' },
+  cardBody: { paddingHorizontal: 16, paddingTop: 12 },
+  infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  infoChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 12,
   },
-
-  title: {
-    marginLeft: 8,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1E1E1E',
+  infoText: { fontSize: 13, fontWeight: '600' },
+  cardFooter: { paddingHorizontal: 16, paddingBottom: 12, paddingTop: 10 },
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-end',
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, borderColor: '#E74C3C',
   },
-
-  info: {
-    fontSize: 14,
-    color: '#7A7A7A',
-    marginBottom: 3,
+  deleteText: { fontSize: 13, fontWeight: '700', color: '#E74C3C' },
+  backBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginHorizontal: 20, marginTop: 20, padding: 14, borderRadius: 16, borderWidth: 1.5,
   },
-
-  delete: {
-    marginTop: 10,
-    backgroundColor: '#E74C3C',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-
-  deleteText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-
-  empty: {
-    textAlign: 'center',
-    marginTop: 30,
-    color: '#7A7A7A',
-  },
-
-  button: {
-    backgroundColor: '#4A90E2',
-    margin: 20,
-    padding: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  backBtnText: { fontSize: 15, fontWeight: '700' },
 });
 
 export default RecordatoriosGuardadosScreen;
